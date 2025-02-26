@@ -14,6 +14,7 @@ interface TenantPageProps {
 
 export default async function TenantPage({ params }: TenantPageProps) {
   const { tenant } = params;
+  console.log('tenant', tenant);
 
   // Query the Neon DB via Drizzle ORM
   const result = await db
@@ -25,7 +26,6 @@ export default async function TenantPage({ params }: TenantPageProps) {
 
   // If no tenant configuration is found, show 404
   if (!tenantRow) {
-    return <><div>{tenant}</div></>
     notFound();
   }
 
