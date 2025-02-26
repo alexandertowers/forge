@@ -18,7 +18,7 @@ export function middleware(request: NextRequest) {
   
   // For Vercel preview deployments using `*.vercel.app` domains
   // or for localhost development
-  const isVercelPreview = hostname.includes('vercel.app');
+  const isVercelPreview = hostname.includes('forgewealth.app');
   const isLocalhost = hostname.includes('localhost');
   let subdomain: string | null = null;
   
