@@ -1,4 +1,4 @@
-// app/_tenants/[tenant]/page.tsx
+// app/tenants/[tenant]/page.tsx
 import { db } from '@/lib/db';
 import { tenants } from '@/lib/schema';
 import { eq } from 'drizzle-orm';

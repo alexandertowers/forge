@@ -50,7 +50,7 @@ export function middleware(request: NextRequest) {
       : request.nextUrl.pathname;
       
     return NextResponse.rewrite(
-      new URL(`/_tenants/${subdomain}${path}`, request.url)
+      new URL(`/tenants/${subdomain}${path}`, request.url)
     );
   }
 }
