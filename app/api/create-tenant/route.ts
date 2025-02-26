@@ -36,12 +36,10 @@ export async function POST(request: Request) {
     
     // Build the tenant URL based on environment
     let url: string;
-    if (process.env.VERCEL_URL) {
-      url = `https://${validatedData.tenantId}.${process.env.VERCEL_URL}`;
-    } else if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development') {
       url = `http://localhost:3000/${validatedData.tenantId}`;
     } else {
-      url = `https://${validatedData.tenantId}.yourdomain.com`;
+      url = `https://${validatedData.tenantId}.forgewealth.app`;
     }
     
     return NextResponse.json({ success: true, url });
