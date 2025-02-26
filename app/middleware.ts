@@ -19,6 +19,8 @@ export function middleware(request: NextRequest) {
   // For Vercel preview deployments using `*.vercel.app` domains
   // or for localhost development
   const isVercelPreview = hostname.includes('forgewealth.app');
+  //log
+    console.log('isVercelPreview', isVercelPreview);
   const isLocalhost = hostname.includes('localhost');
   let subdomain: string | null = null;
   
@@ -45,6 +47,8 @@ export function middleware(request: NextRequest) {
   
   // If we identified a subdomain, rewrite the request
   if (subdomain && subdomain !== 'www') {
+    // log
+    console.log('subdomain', subdomain);
     const path = isLocalhost 
       ? request.nextUrl.pathname.replace(`/${subdomain}`, '') || '/'
       : request.nextUrl.pathname;
