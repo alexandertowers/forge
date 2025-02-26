@@ -25,6 +25,7 @@ export default async function TenantPage({ params }: TenantPageProps) {
 
   // If no tenant configuration is found, show 404
   if (!tenantRow) {
+    return <><div>{tenant}</div></>
     notFound();
   }
 
