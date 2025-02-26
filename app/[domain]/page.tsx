@@ -3,9 +3,7 @@ import WealthDashboard from '@/components/WealthDashboard';
 import { notFound } from 'next/navigation';
 
 interface DomainPageProps {
-  params: {
-    domain: string;
-  };
+    params: Promise<{ domain: string }>;
 }
 
 export default async function DomainPage({ params }: DomainPageProps) {
