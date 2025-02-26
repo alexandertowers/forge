@@ -1,6 +1,5 @@
 'use client';
 
-import * as React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -24,6 +23,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { useState } from 'react';
 
 const FormSchema = z.object({
   tenantId: TenantConfigSchema.shape.tenantId,
@@ -49,7 +49,7 @@ export default function TenantConfigForm() {
     },
   });
 
-  const [result, setResult] = React.useState<{
+  const [result, setResult] = useState<{
     success?: boolean;
     url?: string;
     error?: string;
@@ -78,8 +78,12 @@ export default function TenantConfigForm() {
         throw new Error(resData.error || 'Failed to create tenant');
       }
       setResult(resData);
-    } catch (error: any) {
-      setResult({ error: error.message || 'An unknown error occurred' });
+    } catch (error) {
+      if (error instanceof Error) {
+        setResult({ error: error.message });
+      } else {
+        setResult({ error: 'An unknown error occurred' });
+      }
     }
   };
 
