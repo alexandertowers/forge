@@ -7,13 +7,11 @@ import WealthDashboard from '@/components/WealthDashboard';
 import type { TenantConfig } from '@/lib/types';
 
 interface TenantPageProps {
-  params: {
-    tenant: string;
-  };
+  params: Promise<{ tenant: string }>;
 }
 
 export default async function TenantPage({ params }: TenantPageProps) {
-  const { tenant } = params;
+  const { tenant } = await params;
   console.log('tenant', tenant);
 
   // Query the Neon DB via Drizzle ORM
