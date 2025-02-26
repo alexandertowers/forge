@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { tenants } from '@/lib/schema';
 import { eq } from 'drizzle-orm';
 import WealthDashboard from '@/components/WealthDashboard';
-import { notFound } from 'next/navigation';
+// import { notFound } from 'next/navigation';
 import type { TenantConfig } from '@/lib/types';
 
 interface TenantPageProps {
