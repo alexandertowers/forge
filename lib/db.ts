@@ -1,4 +1,8 @@
-import { TenantConfig } from './types';
+import { neon } from '@neondatabase/serverless';
+import { drizzle } from 'drizzle-orm/neon-http';
 
-// Simple in-memory store for the proof of concept
-export const tenants = new Map<string, TenantConfig>();
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL must be set in your environment");
+}
+
+export const db = drizzle(process.env.DATABASE_URL);

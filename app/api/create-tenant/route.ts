@@ -1,64 +1,55 @@
 import { NextResponse } from 'next/server';
-import { tenants } from '@/lib/db';
-import { TenantConfigSchema } from '@/lib/types';
+import { db } from '@/lib/db';
+import { tenants } from '@/lib/schema';
 import { z } from 'zod';
+
+// Define a schema for your tenant configuration
+const RequestSchema = z.object({
+  tenantId: z.string(),
+  config: z.object({
+    companyName: z.string(),
+    taxJurisdiction: z.enum(['US', 'UK', 'EU', 'CA', 'AU']),
+    currency: z.enum(['USD', 'EUR', 'GBP', 'CAD', 'AUD']),
+    colors: z.object({
+      primary: z.string().regex(/^#([0-9A-F]{6})$/i),
+      secondary: z.string().regex(/^#([0-9A-F]{6})$/i)
+    })
+  })
+});
 
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    
-    // Define the expected request schema
-    const RequestSchema = z.object({
-      tenantId: z.string(),
-      config: TenantConfigSchema.omit({ tenantId: true })
-    });
-    
-    // Validate the incoming data
     const validatedData = RequestSchema.parse(data);
     
-    // Store tenant config with full validation
-    const fullConfig = TenantConfigSchema.parse({
+    // Insert into Neon using Drizzle ORM
+    await db.insert(tenants).values({
       tenantId: validatedData.tenantId,
-      ...validatedData.config,
-      createdAt: new Date().toISOString()
+      companyName: validatedData.config.companyName,
+      taxJurisdiction: validatedData.config.taxJurisdiction,
+      currency: validatedData.config.currency,
+      colors: {
+        primary: validatedData.config.colors.primary,
+        secondary: validatedData.config.colors.secondary,
+      },
     });
     
-    // Store in our mock database
-    tenants.set(validatedData.tenantId, fullConfig);
-    
-    // Generate URLs for different environments
+    // Build the tenant URL based on environment
     let url: string;
-    
-    // Check if we're in a Vercel environment
     if (process.env.VERCEL_URL) {
-      // On Vercel, we use the project's deployment URL
       url = `https://${validatedData.tenantId}.${process.env.VERCEL_URL}`;
     } else if (process.env.NODE_ENV === 'development') {
-      // For local development, use localhost with path-based approach
       url = `http://localhost:3000/${validatedData.tenantId}`;
     } else {
-      // Production with custom domain
       url = `https://${validatedData.tenantId}.yourdomain.com`;
     }
     
-    // Return success with subdomain URL
-    return NextResponse.json({ 
-      success: true, 
-      url
-    });
+    return NextResponse.json({ success: true, url });
   } catch (error) {
-    // Handle Zod validation errors
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ 
-        error: 'Validation error', 
-        details: error.errors 
-      }, { status: 400 });
+      return NextResponse.json({ error: 'Validation error', details: error.errors }, { status: 400 });
     }
-    
-    // Handle other errors
     console.error('Error creating tenant:', error);
-    return NextResponse.json({ 
-      error: 'Failed to create tenant' 
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to create tenant' }, { status: 500 });
   }
 }
