@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { auth } from '@clerk/nextjs/server';
+
 
 const isProtectedRoute = createRouteMatcher(['/:domain(.+)']);
 
@@ -39,49 +41,22 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
       tenantId = domainParts[0];
     }
   }
-  
-  // Skip organization check for auth paths
-  const isAuthPath = request.nextUrl.pathname.includes('/sign-in') || 
-                    request.nextUrl.pathname.includes('/sign-up');
-  
-  // If we have a tenant ID and we're not on an auth path, verify organization membership
-  // if (tenantId && tenantId !== 'www' && !isAuthPath) {
-    
-  //   // Skip membership check if not authenticated yet
-  //   if (auth.userId) {
-  //     try {
-  //       // Get tenant info from database
-  //       const tenantResults = await db.select().from(tenants).where(eq(tenants.tenantId, tenantId));
-        
-  //       if (tenantResults.length === 0) {
-  //         console.error(`No tenant found for ID: ${tenantId}`);
-  //         return NextResponse.redirect(new URL('/tenant-not-found', request.url));
-  //       }
-        
-  //       const tenant = tenantResults[0];
-        
-  //       // Check if user is a member of the organization
-  //       if (tenant.organizationId) {
-  //         const { organizationId } = tenant;
-          
-  //         // Get user's organizations from Clerk
-  //         const orgId = await auth.orgId;
-  //         const isMember = orgId === organizationId;
-          
-  //         // If not a member, redirect to unauthorized page
-  //         if (!isMember) {
-  //           return NextResponse.redirect(new URL('/unauthorized', request.url));
-  //         }
-  //       }
-  //     } catch (error) {
-  //       console.error('Error checking organization membership:', error);
-  //       // Continue with the request if there's an error checking membership
-  //     }
-  //   }
-  // }
-  
+
   // If we identified a tenant, rewrite the request
   if (tenantId && tenantId !== 'www') {
+    const clerk = await clerkClient();
+
+    const { orgId }= await auth();
+
+    const org = await clerk.organizations.getOrganization({ organizationId: orgId });
+
+    const hasAccess = org.name === tenantId;
+    if (!hasAccess) {
+      console.error('User memberships do not grant access to tenant:', tenantId);
+      return NextResponse.redirect(new URL(`/`, request.url));
+        }
+
+
     try {
       const path = isLocalhost 
         ? request.nextUrl.pathname.replace(`/${tenantId}`, '') || '/'
