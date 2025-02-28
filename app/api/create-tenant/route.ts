@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       skipPasswordRequirement: true,
     })
 
-    const membership = await clerk.organizations.createOrganizationMembership({
+    await clerk.organizations.createOrganizationMembership({
       userId: user.id,
       organizationId: org.id,
       role: 'org:admin',
