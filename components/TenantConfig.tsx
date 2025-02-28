@@ -32,6 +32,7 @@ const FormSchema = z.object({
   currency: TenantConfigSchema.shape.currency,
   colorPrimary: z.string().regex(/^#([0-9A-F]{6})$/i, { message: 'Must be a valid hex color' }),
   colorSecondary: z.string().regex(/^#([0-9A-F]{6})$/i, { message: 'Must be a valid hex color' }),
+  seedUserEmail: z.string().email(),
 });
 
 type FormData = z.infer<typeof FormSchema>;
@@ -46,6 +47,7 @@ export default function TenantConfigForm() {
       currency: 'USD',
       colorPrimary: '#1E40AF',
       colorSecondary: '#60A5FA',
+      seedUserEmail: '',
     },
   });
 
@@ -71,6 +73,7 @@ export default function TenantConfigForm() {
               secondary: data.colorSecondary,
             },
           },
+          seedUserEmail: data.seedUserEmail,
         }),
       });
       const resData = await response.json();
@@ -242,6 +245,23 @@ export default function TenantConfigForm() {
                       />
                     </FormControl>
                   </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="seedUserEmail"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Seed User Email</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Seed User Email" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    An Invite will be sent to this address to create the first Admin on your platform.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

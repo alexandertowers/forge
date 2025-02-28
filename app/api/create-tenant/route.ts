@@ -15,7 +15,8 @@ const RequestSchema = z.object({
       primary: z.string().regex(/^#([0-9A-F]{6})$/i),
       secondary: z.string().regex(/^#([0-9A-F]{6})$/i)
     })
-  })
+  }),
+  seedUserEmail: z.string().email(),
 });
 
 export async function POST(request: Request) {
@@ -27,6 +28,17 @@ export async function POST(request: Request) {
     const org = await clerk.organizations.createOrganization({
       name: validatedData.tenantId,
     });
+ 
+    const user = await clerk.users.createUser({
+      emailAddress: [validatedData.seedUserEmail],
+      skipPasswordRequirement: true,
+    })
+
+    const membership = await clerk.organizations.createOrganizationMembership({
+      userId: user.id,
+      organizationId: org.id,
+      role: 'org:admin',
+    })
     
     // Insert into Neon using Drizzle ORM
     await db.insert(tenants).values({
