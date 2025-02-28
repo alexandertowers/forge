@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { tenants } from '@/lib/schema';
 import { z } from 'zod';
+import { clerkClient } from '@clerk/nextjs/server';
 
 // Define a schema for your tenant configuration
 const RequestSchema = z.object({
@@ -21,6 +22,11 @@ export async function POST(request: Request) {
   try {
     const data = await request.json();
     const validatedData = RequestSchema.parse(data);
+
+    const clerk = await clerkClient();
+    const org = await clerk.organizations.createOrganization({
+      name: validatedData.tenantId,
+    });
     
     // Insert into Neon using Drizzle ORM
     await db.insert(tenants).values({
@@ -32,6 +38,7 @@ export async function POST(request: Request) {
         primary: validatedData.config.colors.primary,
         secondary: validatedData.config.colors.secondary,
       },
+      orgId: org.id
     });
     
     // Build the tenant URL based on environment

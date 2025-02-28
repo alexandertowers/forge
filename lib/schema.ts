@@ -7,4 +7,5 @@ export const tenants = pgTable("tenants", {
   currency: text("currency").notNull(),
   colors: json("colors").$type<{ primary: string; secondary: string }>().notNull(),
   createdAt: timestamp("created_at").defaultNow(),
+  orgId: varchar("org_id", { length: 63 }).notNull(),
 });
