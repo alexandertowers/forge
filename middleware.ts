@@ -2,19 +2,19 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-
-const isProtectedRoute = createRouteMatcher(['/:domain(.+)', '/tenants/:tenantId(.*)']);
+// Match tenant paths after rewrite (e.g., /tenants/org)
+const isProtectedRoute = createRouteMatcher(['/tenants/:tenantId(.*)']);
 
 async function tenantMiddleware(request: NextRequest, auth: any) {
   const hostname = request.headers.get('host') || '';
   
+  // Skip static assets and API routes
   if (request.nextUrl.pathname.startsWith('/api') || 
       request.nextUrl.pathname.startsWith('/_next') ||
       request.nextUrl.pathname.startsWith('/static')) {
     return NextResponse.next();
   }
   
-  // Extract subdomain (tenant)
   const currentHost = hostname.split(':')[0];
   const domainParts = currentHost.split('.');
   
@@ -22,80 +22,104 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
   const isLocalhost = hostname.includes('localhost');
   let tenantId: string | null = null;
   
+  // Extract tenant ID from subdomain or path
   if (isVercelPreview) {
-    // tenant-name.forgewealth.app
     tenantId = domainParts[0];
   } else if (isLocalhost) {
-    // For localhost, extract from path instead (e.g. localhost:3000/tenant-name)
     const pathSegments = request.nextUrl.pathname.split('/');
     tenantId = pathSegments[1] || null;
-    
-    // Skip rewrite if we're on the root path
     if (pathSegments.length <= 1) {
       return NextResponse.next();
     }
   } else {
-    // Production with custom domain: tenant.yourdomain.com
     if (domainParts.length >= 3) {
       tenantId = domainParts[0];
     }
   }
 
-  // If we identified a tenant, rewrite the request
+  // Perform rewrite for tenant subdomain
   if (tenantId && tenantId !== 'www') {
-    const clerk = await clerkClient();
-
-    const { orgId }= await auth();
-
-    const org = await clerk.organizations.getOrganization({ organizationId: orgId });
-
-    const hasAccess = org.name === tenantId;
-    if (!hasAccess) {
-      console.error('User memberships do not grant access to tenant:', tenantId);
-      return NextResponse.redirect(new URL(`/`, request.url));
-        }
-
-
     try {
       const path = isLocalhost 
         ? request.nextUrl.pathname.replace(`/${tenantId}`, '') || '/'
         : request.nextUrl.pathname;
       
-      // Create destination URL with search params
       const url = new URL(`/tenants/${tenantId}${path}`, request.url);
-      
-      // Copy all search params
       request.nextUrl.searchParams.forEach((value, key) => {
         url.searchParams.set(key, value);
       });
       
-      return NextResponse.rewrite(url);
+      // Rewrite the URL but don't return yet - let the matcher handle protection
+      request.nextUrl.pathname = `/tenants/${tenantId}${path}`;
     } catch (error) {
-      console.error('Error in tenant middleware:', error);
-      return NextResponse.next();
+      return new NextResponse(
+        JSON.stringify({ 
+          error: 'An error occurred during tenant URL rewriting',
+          details: error instanceof Error ? error.message : String(error)
+        }),
+        { 
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
     }
   }
   
+  // Continue to next middleware step
   return NextResponse.next();
 }
 
 export default clerkMiddleware(async (auth, req) => {
+  try {
+    if (
+      req.nextUrl.pathname.startsWith('/api') ||
+      req.nextUrl.pathname.startsWith('/_next') ||
+      req.nextUrl.pathname.startsWith('/static')
+    ) {
+      return NextResponse.next();
+    }
+    
+    // First, handle the tenant subdomain rewrite
+    const rewriteResponse = await tenantMiddleware(req, auth);
+    if (rewriteResponse.status !== 200) {
+      return rewriteResponse; // Return early if rewrite failed
+    }
 
-  if (
-    req.nextUrl.pathname.startsWith('/api') ||
-    req.nextUrl.pathname.startsWith('/_next') ||
-    req.nextUrl.pathname.startsWith('/static')
-  ) {
+    // After rewrite, check if it's a protected route
+    if (isProtectedRoute(req)) {
+      const { userId, orgId } = await auth.protect(); // This redirects to sign-in if not authenticated
+      
+      // If authenticated, verify organization access
+      const clerk = await clerkClient();
+      const tenantId = req.nextUrl.pathname.split('/')[2]; // Extract tenantId from /tenants/:tenantId
+      const org = await clerk.organizations.getOrganization({ organizationId: orgId! });
+
+      const hasAccess = org.name === tenantId;
+      if (!hasAccess) {
+        return new NextResponse(
+          JSON.stringify({ error: `Access denied: You don't have permission to access tenant '${tenantId}'` }),
+          { 
+            status: 403,
+            headers: { 'Content-Type': 'application/json' }
+          }
+        );
+      }
+    }
+    
     return NextResponse.next();
+  } catch (error) {
+    return new NextResponse(
+      JSON.stringify({ 
+        error: 'An error occurred in middleware',
+        details: error instanceof Error ? error.message : String(error)
+      }),
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
   }
-
-  if (isProtectedRoute(req)) {
-    await auth.protect();
-  }
-  
-  return tenantMiddleware(req, auth);
 });
-
 
 export const config = {
   matcher: [
