@@ -42,17 +42,20 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
 
   // If we identified a tenant, rewrite the request
   if (tenantId && tenantId !== 'www') {
-    const clerk = await clerkClient();
+    // if logged in, check if user has access to tenant
+    if (auth) {
+      const clerk = await clerkClient();
 
-    const { orgId }= await auth();
+      const { orgId }= await auth();
 
-    const org = await clerk.organizations.getOrganization({ organizationId: orgId });
+      const org = await clerk.organizations.getOrganization({ organizationId: orgId });
 
-    const hasAccess = org.name === tenantId;
-    if (!hasAccess) {
-      console.error('User memberships do not grant access to tenant:', tenantId);
-      return NextResponse.redirect(new URL(`/`, request.url));
-        }
+      const hasAccess = org.name === tenantId;
+      if (!hasAccess) {
+        console.error('User memberships do not grant access to tenant:', tenantId);
+        return NextResponse.redirect(new URL(`/`, request.url));
+      }
+    }
 
 
     try {
@@ -83,9 +86,8 @@ export default clerkMiddleware(async (auth, req) => {
   if (
     req.nextUrl.pathname.startsWith('/api') ||
     req.nextUrl.pathname.startsWith('/_next') ||
-    req.nextUrl.pathname.startsWith('/static') ||
-    req.nextUrl.pathname.startsWith('/sign-in')
-
+    req.nextUrl.pathname.startsWith('/static')
+    
   ) {
     return NextResponse.next();
   }
