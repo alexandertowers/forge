@@ -2,11 +2,16 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-const isProtectedRoute = createRouteMatcher(['/:domain(.+)']);
+// Path-based matcher (if you still need it for specific routes)
+const isProtectedPath = createRouteMatcher([
+  '/dashboard(.*)',  // Example: protect specific paths if needed
+  '/settings(.*)',
+]);
 
 async function tenantMiddleware(request: NextRequest, auth: any) {
   const hostname = request.headers.get('host') || '';
   
+  // Skip static assets and API routes
   if (request.nextUrl.pathname.startsWith('/api') || 
       request.nextUrl.pathname.startsWith('/_next') ||
       request.nextUrl.pathname.startsWith('/static')) {
@@ -20,12 +25,12 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
   const isLocalhost = hostname.includes('localhost');
   let tenantId: string | null = null;
   
+  // Extract tenant ID from subdomain or path
   if (isVercelPreview) {
     tenantId = domainParts[0];
   } else if (isLocalhost) {
     const pathSegments = request.nextUrl.pathname.split('/');
     tenantId = pathSegments[1] || null;
-    
     if (pathSegments.length <= 1) {
       return NextResponse.next();
     }
@@ -35,21 +40,32 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
     }
   }
 
+  // If we have a tenant ID, this is a protected tenant route
   if (tenantId && tenantId !== 'www') {
+    // Protect tenant routes - redirect to sign-in if not authenticated
+    const { userId, orgId } = await auth();
+    
+    if (!userId) {
+      const signInUrl = new URL('/sign-in', request.url);
+      signInUrl.searchParams.set('redirect_url', request.url);
+      return NextResponse.redirect(signInUrl);
+    }
+
     try {
-      const clerk = await clerkClient();
-      const { orgId } = await auth();
-      
       if (!orgId) {
         return new NextResponse(
-          JSON.stringify({ error: 'No organization ID found. Please authenticate.' }),
+          JSON.stringify({ 
+            error: 'No organization found for authenticated user',
+            details: 'Please ensure you belong to an organization'
+          }),
           { 
-            status: 401,
+            status: 403,
             headers: { 'Content-Type': 'application/json' }
           }
         );
       }
 
+      const clerk = await clerkClient();
       const org = await clerk.organizations.getOrganization({ organizationId: orgId });
 
       const hasAccess = org.name === tenantId;
@@ -99,8 +115,9 @@ export default clerkMiddleware(async (auth, req) => {
     ) {
       return NextResponse.next();
     }
-  
-    if (isProtectedRoute(req)) {
+    
+    // Apply path-based protection if needed
+    if (isProtectedPath(req)) {
       await auth.protect();
     }
     
