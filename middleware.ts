@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
-import { auth } from '@clerk/nextjs/server';
-
 
 const isProtectedRoute = createRouteMatcher(['/:domain(.+)']);
 
