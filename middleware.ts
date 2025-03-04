@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
+
 const isProtectedRoute = createRouteMatcher(['/:domain(.+)', '/tenants/:tenantId(.*)']);
 
 async function tenantMiddleware(request: NextRequest, auth: any) {
@@ -13,6 +14,7 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
     return NextResponse.next();
   }
   
+  // Extract subdomain (tenant)
   const currentHost = hostname.split(':')[0];
   const domainParts = currentHost.split('.');
   
@@ -21,69 +23,56 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
   let tenantId: string | null = null;
   
   if (isVercelPreview) {
+    // tenant-name.forgewealth.app
     tenantId = domainParts[0];
   } else if (isLocalhost) {
+    // For localhost, extract from path instead (e.g. localhost:3000/tenant-name)
     const pathSegments = request.nextUrl.pathname.split('/');
     tenantId = pathSegments[1] || null;
     
+    // Skip rewrite if we're on the root path
     if (pathSegments.length <= 1) {
       return NextResponse.next();
     }
   } else {
+    // Production with custom domain: tenant.yourdomain.com
     if (domainParts.length >= 3) {
       tenantId = domainParts[0];
     }
   }
 
+  // If we identified a tenant, rewrite the request
   if (tenantId && tenantId !== 'www') {
+    const clerk = await clerkClient();
+
+    const { orgId }= await auth();
+
+    const org = await clerk.organizations.getOrganization({ organizationId: orgId });
+
+    const hasAccess = org.name === tenantId;
+    if (!hasAccess) {
+      console.error('User memberships do not grant access to tenant:', tenantId);
+      return NextResponse.redirect(new URL(`/`, request.url));
+        }
+
+
     try {
-      const clerk = await clerkClient();
-      const { orgId } = await auth();
-      
-      if (!orgId) {
-        return new NextResponse(
-          JSON.stringify({ error: 'No organization ID found. Please authenticate.' }),
-          { 
-            status: 401,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
-
-      const org = await clerk.organizations.getOrganization({ organizationId: orgId });
-
-      const hasAccess = org.name === tenantId;
-      if (!hasAccess) {
-        return new NextResponse(
-          JSON.stringify({ error: `Access denied: You don't have permission to access tenant '${tenantId}'` }),
-          { 
-            status: 403,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
-
       const path = isLocalhost 
         ? request.nextUrl.pathname.replace(`/${tenantId}`, '') || '/'
         : request.nextUrl.pathname;
       
+      // Create destination URL with search params
       const url = new URL(`/tenants/${tenantId}${path}`, request.url);
+      
+      // Copy all search params
       request.nextUrl.searchParams.forEach((value, key) => {
         url.searchParams.set(key, value);
       });
       
       return NextResponse.rewrite(url);
     } catch (error) {
-      return new NextResponse(
-        JSON.stringify({ 
-          error: 'An error occurred in tenant middleware',
-          details: error instanceof Error ? error.message : String(error)
-        }),
-        { 
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        }
-      );
+      console.error('Error in tenant middleware:', error);
+      return NextResponse.next();
     }
   }
   
@@ -91,33 +80,22 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
 }
 
 export default clerkMiddleware(async (auth, req) => {
-  try {
-    if (
-      req.nextUrl.pathname.startsWith('/api') ||
-      req.nextUrl.pathname.startsWith('/_next') ||
-      req.nextUrl.pathname.startsWith('/static')
-    ) {
-      return NextResponse.next();
-    }
-  
-    if (isProtectedRoute(req)) {
-      await auth.protect();
-    }
-    
-    return tenantMiddleware(req, auth);
-  } catch (error) {
-    return new NextResponse(
-      JSON.stringify({ 
-        error: 'An error occurred in middleware',
-        details: error instanceof Error ? error.message : String(error)
-      }),
-      { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+
+  if (
+    req.nextUrl.pathname.startsWith('/api') ||
+    req.nextUrl.pathname.startsWith('/_next') ||
+    req.nextUrl.pathname.startsWith('/static')
+  ) {
+    return NextResponse.next();
   }
+
+  if (isProtectedRoute(req)) {
+    await auth.protect();
+  }
+  
+  return tenantMiddleware(req, auth);
 });
+
 
 export const config = {
   matcher: [
