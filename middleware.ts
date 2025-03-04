@@ -7,12 +7,6 @@ const isProtectedRoute = createRouteMatcher(['/tenants/:tenant(.+)']);
 async function tenantMiddleware(request: NextRequest, auth: any) {
   const hostname = request.headers.get('host') || '';
   
-  if (request.nextUrl.pathname.startsWith('/api') || 
-      request.nextUrl.pathname.startsWith('/_next') ||
-      request.nextUrl.pathname.startsWith('/static')) {
-    return NextResponse.next();
-  }
-  
   // Extract subdomain (tenant)
   const currentHost = hostname.split(':')[0];
   const domainParts = currentHost.split('.');
@@ -81,21 +75,10 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
   return NextResponse.next();
 }
 
-export default clerkMiddleware(async (auth, req) => {
-
-  if (
-    req.nextUrl.pathname.startsWith('/api') ||
-    req.nextUrl.pathname.startsWith('/_next') ||
-    req.nextUrl.pathname.startsWith('/static')
-    
-  ) {
-    return NextResponse.next();
-  }
-
+export default clerkMiddleware(async (auth, req) => {  
   if (isProtectedRoute(req)) {
     await auth.protect();
   }
-  
   return tenantMiddleware(req, auth);
 });
 
