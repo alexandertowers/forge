@@ -39,22 +39,68 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
 
   // Perform rewrite for tenant subdomain
   if (tenantId && tenantId !== 'www') {
-    try {
-      const path = isLocalhost 
-        ? request.nextUrl.pathname.replace(`/${tenantId}`, '') || '/'
-        : request.nextUrl.pathname;
-      
-      const url = new URL(`/tenants/${tenantId}${path}`, request.url);
-      request.nextUrl.searchParams.forEach((value, key) => {
-        url.searchParams.set(key, value);
-      });
-      
-      // Rewrite the URL but don't return yet - let the matcher handle protection
-      request.nextUrl.pathname = `/tenants/${tenantId}${path}`;
-    } catch (error) {
+    const path = isLocalhost 
+      ? request.nextUrl.pathname.replace(`/${tenantId}`, '') || '/'
+      : request.nextUrl.pathname;
+    
+    const url = new URL(`/tenants/${tenantId}${path}`, request.url);
+    request.nextUrl.searchParams.forEach((value, key) => {
+      url.searchParams.set(key, value);
+    });
+    
+    // Return the rewrite response directly
+    return NextResponse.rewrite(url);
+  }
+  
+  return NextResponse.next();
+}
+
+export default clerkMiddleware(async (auth, req) => {
+  // Skip static assets and API routes
+  if (
+    req.nextUrl.pathname.startsWith('/api') ||
+    req.nextUrl.pathname.startsWith('/_next') ||
+    req.nextUrl.pathname.startsWith('/static')
+  ) {
+    return NextResponse.next();
+  }
+
+  // Handle tenant rewrite first
+  const rewriteResponse = await tenantMiddleware(req, auth);
+  
+  // If it's not a tenant route, proceed as is
+  if (rewriteResponse.status === 200 && !isProtectedRoute(req)) {
+    return rewriteResponse;
+  }
+
+  // For protected tenant routes, handle authentication and authorization
+  try {
+    const { userId, orgId } = await auth.protect(); // This will redirect to sign-in if not authenticated
+    
+    // If we get here, user is authenticated
+    const clerk = await clerkClient();
+    const tenantId = req.nextUrl.pathname.split('/')[2]; // Extract tenantId from /tenants/:tenantId
+    const org = await clerk.organizations.getOrganization({ organizationId: orgId });
+
+    const hasAccess = org.name === tenantId;
+    if (!hasAccess) {
+      return new NextResponse(
+        JSON.stringify({ error: `Access denied: You don't have permission to access tenant '${tenantId}'` }),
+        { 
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    // Return the rewritten response for authenticated users with access
+    return rewriteResponse;
+  } catch (error: any) {
+    // Only catch non-redirect errors
+    if (error.message !== 'NEXT_REDIRECT') {
       return new NextResponse(
         JSON.stringify({ 
-          error: 'An error occurred during tenant URL rewriting',
+          error: 'An error occurred in middleware',
           details: error instanceof Error ? error.message : String(error)
         }),
         { 
@@ -63,61 +109,8 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
         }
       );
     }
-  }
-  
-  // Continue to next middleware step
-  return NextResponse.next();
-}
-
-export default clerkMiddleware(async (auth, req) => {
-  try {
-    if (
-      req.nextUrl.pathname.startsWith('/api') ||
-      req.nextUrl.pathname.startsWith('/_next') ||
-      req.nextUrl.pathname.startsWith('/static')
-    ) {
-      return NextResponse.next();
-    }
-    
-    // First, handle the tenant subdomain rewrite
-    const rewriteResponse = await tenantMiddleware(req, auth);
-    if (rewriteResponse.status !== 200) {
-      return rewriteResponse; // Return early if rewrite failed
-    }
-
-    // After rewrite, check if it's a protected route
-    if (isProtectedRoute(req)) {
-      const { userId, orgId } = await auth.protect(); // This redirects to sign-in if not authenticated
-      
-      // If authenticated, verify organization access
-      const clerk = await clerkClient();
-      const tenantId = req.nextUrl.pathname.split('/')[2]; // Extract tenantId from /tenants/:tenantId
-      const org = await clerk.organizations.getOrganization({ organizationId: orgId! });
-
-      const hasAccess = org.name === tenantId;
-      if (!hasAccess) {
-        return new NextResponse(
-          JSON.stringify({ error: `Access denied: You don't have permission to access tenant '${tenantId}'` }),
-          { 
-            status: 403,
-            headers: { 'Content-Type': 'application/json' }
-          }
-        );
-      }
-    }
-    
-    return NextResponse.next();
-  } catch (error) {
-    return new NextResponse(
-      JSON.stringify({ 
-        error: 'An error occurred in middleware',
-        details: error instanceof Error ? error.message : String(error)
-      }),
-      { 
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+    // Let NEXT_REDIRECT pass through for sign-in redirect
+    throw error;
   }
 });
 
