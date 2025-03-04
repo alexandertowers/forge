@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { clerkClient, clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-const isProtectedRoute = createRouteMatcher(['/:domain(.+)', '/tenants/:tenant(.+)']);
+const isProtectedRoute = createRouteMatcher(['/tenants/:tenant(.+)']);
 
 async function tenantMiddleware(request: NextRequest, auth: any) {
   const hostname = request.headers.get('host') || '';
