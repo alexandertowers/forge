@@ -79,20 +79,25 @@ async function tenantMiddleware(request: NextRequest, auth: any) {
 }
 
 export default clerkMiddleware(async (auth, req) => {
-
-  if (
-    req.nextUrl.pathname.startsWith('/api') ||
-    req.nextUrl.pathname.startsWith('/_next') ||
-    req.nextUrl.pathname.startsWith('/static')
-  ) {
+  try {
+    if (
+      req.nextUrl.pathname.startsWith('/api') ||
+      req.nextUrl.pathname.startsWith('/_next') ||
+      req.nextUrl.pathname.startsWith('/static')
+    ) {
+      return NextResponse.next();
+    }
+  
+    if (isProtectedRoute(req)) {
+      await auth.protect();
+    }
+    
+    return tenantMiddleware(req, auth);
+  }
+  catch (error) {
+    console.error('Error in middleware:', error);
     return NextResponse.next();
   }
-
-  if (isProtectedRoute(req)) {
-    await auth.protect();
-  }
-  
-  return tenantMiddleware(req, auth);
 });
 
 
