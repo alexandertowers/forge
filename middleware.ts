@@ -80,7 +80,7 @@ export default clerkMiddleware(async (auth, req) => {
     // If we get here, user is authenticated
     const clerk = await clerkClient();
     const tenantId = req.nextUrl.pathname.split('/')[2]; // Extract tenantId from /tenants/:tenantId
-    const org = await clerk.organizations.getOrganization({ organizationId: orgId });
+    const org = await clerk.organizations.getOrganization({ organizationId: orgId! });
 
     const hasAccess = org.name === tenantId;
     if (!hasAccess) {
