@@ -83,7 +83,9 @@ export default clerkMiddleware(async (auth, req) => {
   if (
     req.nextUrl.pathname.startsWith('/api') ||
     req.nextUrl.pathname.startsWith('/_next') ||
-    req.nextUrl.pathname.startsWith('/static')
+    req.nextUrl.pathname.startsWith('/static') ||
+    req.nextUrl.pathname.startsWith('/sign-in')
+
   ) {
     return NextResponse.next();
   }
